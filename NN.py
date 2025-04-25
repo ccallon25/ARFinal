@@ -7,6 +7,7 @@ import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 base_path = 'Lemur-program-verification/lemur/benchmarks/sv_comp/c/'
+#https://arxiv.org/pdf/2205.12424
 model_name = "claudios/VulBERTa-MLP-Devign" #can change this to other hugging face models... maybe research a little more
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSequenceClassification.from_pretrained(model_name)
