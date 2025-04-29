@@ -30,19 +30,22 @@ def run_cbmc_verification(yml_path, base_dir):
     full_yml_path = os.path.join(base_dir, yml_path)
     with open(full_yml_path, 'r') as f:
         meta = yaml.safe_load(f)
+
     c_file = os.path.join(base_dir, meta['input_files'])
     properties = meta.get('properties', [])
-    cbmc_flags = ['--unwind', '10'] 
+    
+    cbmc_flags = ['--unwind', '50', '--no-standard-checks','--unwinding-assertions']
     property_map = {
         'no-overflow': ['--signed-overflow-check', '--unsigned-overflow-check'],
-        'unreach-call': [], 
+        'unreach-call': [],
         'valid-deref': ['--pointer-check'],
         'valid-free': ['--pointer-check', '--memory-leak-check'],
         'valid-memtrack': ['--memory-leak-check'],
-        'termination': [],
+        'termination': ['function','main'],
         'memory-safety': ['--pointer-check', '--memory-leak-check', '--bounds-check'],
-        'coverage': [] 
+        'coverage': []  
     }
+
     found_properties = []
     for prop in properties:
         prop_file = prop['property_file']
@@ -55,10 +58,11 @@ def run_cbmc_verification(yml_path, base_dir):
                     if flag not in cbmc_flags:
                         cbmc_flags.append(flag)
                 if pattern == 'coverage':
-                    print(f"Skip coverage, CBMC does not have")
-                break       
+                    print(f"Skipping coverage properties (unsupported)")
+                break
         if not found_property:
             print(f"Unknown property: {prop_file}")
+
     expected_verdicts = []
     for prop in properties:
         if 'expected_verdict' in prop:
@@ -66,12 +70,12 @@ def run_cbmc_verification(yml_path, base_dir):
                 'property': prop['property_file'],
                 'verdict': prop['expected_verdict']
             })
+
     cmd = ['cbmc', c_file] + cbmc_flags
     print(f"\nRunning: {' '.join(cmd)}")
     start_time = time.time()
     try:
-        #maybe try increasing timout?
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60)
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
         output = result.stdout + '\n' + result.stderr
         execution_time = time.time() - start_time
     except subprocess.TimeoutExpired:
@@ -84,22 +88,25 @@ def run_cbmc_verification(yml_path, base_dir):
             'match': False,
             'output': "CBMC timed out"
         }
+
     cbmc_success = "VERIFICATION SUCCESSFUL" in output
     cbmc_failure = "VERIFICATION FAILED" in output
-
     cbmc_verdict = None
+
     if cbmc_success:
         cbmc_verdict = "SUCCESS"
     elif cbmc_failure:
         cbmc_verdict = "FAILURE"
     else:
+        print(f"Warning: CBMC output unclear for {c_file}")
         cbmc_verdict = "UNKNOWN"
+
     if len(expected_verdicts) == 0:
-        print("No expected verdicts specified, cannot compare.")
         match = "UNKNOWN"
     else:
         expected_overall = all(v['verdict'] for v in expected_verdicts)
         match = (cbmc_verdict == "SUCCESS") == expected_overall
+
     return {
         'cbmc_verdict': cbmc_verdict,
         'expected_verdicts': expected_verdicts,
@@ -108,6 +115,7 @@ def run_cbmc_verification(yml_path, base_dir):
         'match': match,
         'output': output
     }
+
 
 results = []
 print(f"\n Verifying {len(yml_files)} benchmarks...\n")
