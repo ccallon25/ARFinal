@@ -19,20 +19,13 @@ def compute_baseline_stats(expected_verdicts):
     """
     if not expected_verdicts:
         return {}
-    
-    # Convert to list of actual verdicts (True/False)
+
     actuals = [v for v in expected_verdicts]
     n = len(actuals)
     n_true = sum(actuals)
     n_false = n - n_true
-    
-    # 1. Always predict 'true'
     always_true_acc = n_true / n
-    
-    # 2. Always predict 'false'
     always_false_acc = n_false / n
-    
-    # 3. Random guessing (50% chance)
     random_acc = 0.5
     
     return {
