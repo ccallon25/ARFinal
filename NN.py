@@ -6,17 +6,11 @@ from tabulate import tabulate
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-base_path = 'Lemur-program-verification/lemur/benchmarks/sv_comp/c/'
-model_name = "claudios/VulBERTa-MLP-Devign" #can change this to other hugging face models... maybe research a little more
+base_path = 'sv-benchmarks/c/floats-esbmc-regression'
+model_name = "claudios/VulBERTa-MLP-Devign" #can change this to other hugging face models
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSequenceClassification.from_pretrained(model_name)
 def compute_baseline_stats(expected_verdicts):
-    """
-    Compute baseline accuracies for three naive strategies:
-    1. Always predict 'true'
-    2. Always predict 'false'
-    3. Random guessing (50/50)
-    """
     if not expected_verdicts:
         return {}
 
@@ -35,7 +29,13 @@ def compute_baseline_stats(expected_verdicts):
         'best_baseline': max(always_true_acc, always_false_acc, random_acc)
     }
 def run_model(code):
-    inputs = tokenizer(code, padding=True, truncation=True, return_tensors="pt")
+    inputs = tokenizer(
+        code,
+        padding='max_length',
+        truncation=True,
+        max_length=512,  # explicitly set limit
+        return_tensors="pt"
+    )
     with torch.no_grad():
         outputs = model(**inputs)
         logits = outputs.logits
@@ -56,9 +56,7 @@ for c_file in c_files:
     yml_file = base_name + '.yml'
     yml_path = os.path.join(base_path, yml_file)
     c_path = os.path.join(base_path, c_file)
-    
     if os.path.exists(yml_path):
-        # Read both files
         with open(c_path, 'r') as f:
             c_code = f.read()
         with open(yml_path, 'r') as f:
@@ -85,17 +83,15 @@ for pair in file_pairs:
     if not properties:
         print(f"No properties in YML for {base_name}")
         continue
-
     start_time = time.time()
     nn_result = run_model(pair['c_code'])
-    threshold = 0.85
+    threshold = 0.80
     predicted_verdict = "true" if nn_result['vulnerability_score'] <= threshold else "false"
     execution_time = time.time() - start_time
     for prop in properties:
         property_file = prop.get('property_file', 'unknown')
         property_name = os.path.basename(property_file)
         expected_verdict = prop.get('expected_verdict')
-        
         if expected_verdict is None:
             print(f"No expected verdict for property {property_name} in {base_name}")
             properties_with_no_verdict += 1
@@ -117,9 +113,9 @@ for pair in file_pairs:
             f"{execution_time:.2f}s"
         ])
 
-
 print(compute_baseline_stats(all_expected_verdicts))
 results.sort(key=lambda x: (x[0], x[1]))
+#creating the table
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 report_filename = f"NN_bugs{timestamp}.txt"
 headers = ["Benchmark", "Property", "Expected Verdict", "Predicted Verdict", 
